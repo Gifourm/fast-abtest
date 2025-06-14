@@ -1,43 +1,48 @@
-from collections.abc import Iterable, Callable
-from dataclasses import dataclass
-from typing import Self, TypeVar, ParamSpec
-from .metrics import Metric
+from collections.abc import Iterable
+from typing import Callable
+
+from .metrics import Metric  # type: ignore
+from .registred_scenario import (  # type: ignore
+    RegisteredScenario,
+    ABTestFunction,
+    ScenarioHandler,
+    R,
+    _ScenarioVariant,
+)
 
 
-R = TypeVar("R")
-P = ParamSpec("P")
-Scenario = TypeVar("Scenario", bound=Callable)
+def ab_test(metrics: Iterable[Metric]) -> Callable:
+    """Decorator for implementing A/B testing of methods.
+    Enables easy creation and management of multiple functions variants (A/B/C...)
+    with automatic traffic distribution between them.
 
+    Args:
+        metrics: Collection of metrics to track (latency, error rate etc.)
+    Returns:
+        A decorator that converts the original function into an A/B-testable version.
+    Example:
+        Basic A/B test:
+        ```python
+        @ab_test(metrics=[Metric.LATENCY, Metric.ERROR_RATE])
+        def get_recommendations(user_id: int) -> list[Recommendation]:
+            # Main variant (A) - receives remaining traffic percentage
+            return generate_recommendations_v1(user_id)
 
-@dataclass
-class _ScenarioVariant:
-    handler: Callable
-    traffic_percent: int
+        @get_recommendations.register_variant(traffic_percent=30)
+        def get_recommendations_b(user_id: int) -> list[Recommendation]:
+            # Alternative variant (B) - receives 30% of traffic
+            return generate_recommendations_v2(user_id)
+        ```
 
+    Features:
+        - Supports unlimited variants (A/B/C/D...)
+        - Automatic traffic distribution
+        - Protection against exceeding 100% traffic allocation
+        - Preserves original function signature
+    """
 
-class ab_test:
-    def __init__(
-        self: Self,
-        metrics: Iterable[Metric],
-    ) -> None:
-        self._metrics = metrics
-        self._variants: dict[str, _ScenarioVariant] = {}
+    def _wrapper(func: ScenarioHandler[R]) -> ABTestFunction[R]:
+        main_scenario = _ScenarioVariant(handler=func, traffic_percent=100)
+        return RegisteredScenario[R](main_scenario)
 
-    def __call__(self, func: Callable) -> Self:
-        self._variants["V0"] = _ScenarioVariant(
-            handler=func,
-            traffic_percent=100,
-        )
-        return self
-
-    def register_variant(self: Self, traffic_percent: int) -> Callable[Callable[[Scenario], Scenario]]:
-        def __wrapper(func: Scenario) -> Scenario:
-            variant_name = f"V{len(self._variants)}"
-            self._variants[variant_name] = _ScenarioVariant(
-                handler=func,
-                traffic_percent=traffic_percent,
-            )
-            print(f"Func registered: {self._variants}")
-            return func
-
-        return __wrapper
+    return _wrapper
