@@ -27,16 +27,15 @@ class ABTestFunction(Protocol[R]):
 
 class RegisteredScenario(Generic[R]):
     def __init__(self: Self, main_scenario: _ScenarioVariant[R]) -> None:
-        self._variants: dict[str, _ScenarioVariant[R]] = {}
+        self._variants: list[_ScenarioVariant[R]] = []
         self._main_scenario = main_scenario
         self._main_scenario_signature = inspect.signature(self._main_scenario.handler)
-        print(self._main_scenario_signature)
 
     def register_variant(self: Self, traffic_percent: int) -> Callable[[ScenarioHandler[R]], ScenarioHandler[R]]:
         def add_to_variants(variant_func: ScenarioHandler[R]) -> ScenarioHandler[R]:
             variant_func = self._validate_variant_signature(variant_func)
-            variant_name = f"V{len(self._variants)}"
-            self._variants[variant_name] = _ScenarioVariant(handler=variant_func, traffic_percent=tp)
+            scenario_variant = _ScenarioVariant(handler=variant_func, traffic_percent=tp)
+            self._variants.append(scenario_variant)
             self._main_scenario.traffic_percent -= tp
             self._validate_total_traffic()
             return variant_func
@@ -71,7 +70,7 @@ class RegisteredScenario(Generic[R]):
     ) -> R:
         rand = randint(1, 100)
         current = 0
-        for variant in self._variants.values():
+        for variant in self._variants:
             current += variant.traffic_percent
             if rand <= current:
                 return variant.handler(*args, **kwargs)
