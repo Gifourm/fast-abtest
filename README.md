@@ -34,9 +34,9 @@ def recommendation_service(user_id: int) -> list[str]:
     # Main variant (A) - receives remaining traffic percentage
     return ["item1", "item2"]
 
-@recommendation_service.register_variant(traffic_percent=30)
+@recommendation_service.register_variant(traffic_percent=30, disable_threshold=0.2)
 def recommendation_service_b(user_id: int) -> list[str]:
-    # Variant B - receives 30% of traffic
+    # Variant B - gets 30% of the traffic. If the error rate exceeds 0.2, traffic redirection will stop.
     return ["item3", "item4"]
 ```
 
@@ -99,14 +99,14 @@ Currently, tracking metrics is not supported.
 
 ## Development Status
 
-Current version: `0.1.0-alpha`
+Current version: `0.2.0-alpha`
 
 ### Roadmap
 
 - [x] Core A/B testing functionality
 - [x] FastAPI integration
 - [x] Async support
-- [ ] Auto-disable failing variants
+- [x] Auto-disable failing variants
 - [ ] Advanced metrics collection
 - [ ] Custom metric callbacks
 - [ ] Distributed traffic consistency
