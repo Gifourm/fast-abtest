@@ -1,8 +1,15 @@
+from random import seed
+
 import pytest
 from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.testclient import TestClient
 from typing import Optional
 from fast_abtest import ab_test
+
+
+@pytest.fixture
+def reset_random():
+    seed(42)
 
 
 @pytest.fixture
@@ -22,6 +29,54 @@ def get_current_user():
 
 async def async_dependency():
     return {"async": True}
+
+
+def test_combined_with_fastapi_route_decorator(client, test_app):
+    """Test @ab_test works together with @app.get"""
+
+    @test_app.get("/combined")
+    @ab_test(metrics=[])
+    def combined_endpoint():
+        return {"version": "A"}
+
+    @combined_endpoint.register_variant(traffic_percent=30)
+    def combined_endpoint_b():
+        return {"version": "B"}
+
+    response = client.get("/combined")
+    assert response.status_code == 200
+    assert response.json()["version"] in ("A", "B")
+
+
+def test_decorator_order_importance():
+    """Checks that the order of the decorators is critical:
+    - @app.get must be BEFORE @ab_test
+    - Otherwise, the variants are never called"""
+
+    app = FastAPI()
+    main_counter = 0
+    variant_counter = 0
+
+    @ab_test(metrics=[])
+    @app.get("/wrong-order")
+    def endpoint_with_bad_order():
+        nonlocal main_counter
+        main_counter += 1
+        return {"version": "A"}
+
+    @endpoint_with_bad_order.register_variant(traffic_percent=90)
+    def variant_b():
+        nonlocal variant_counter
+        variant_counter += 1
+        return {"version": "B"}
+
+    client = TestClient(app)
+
+    for _ in range(1000):
+        client.get("/wrong-order")
+
+    assert variant_counter == 0
+    assert main_counter == 1000
 
 
 def test_path_parameters(client, test_app):
@@ -219,7 +274,7 @@ def test_multiple_http_methods(client, test_app):
     assert response.json()["method"] == "POST"
 
 
-def test_multiple_variants_distribution(client, test_app) -> None:
+def test_multiple_variants_distribution(client, test_app, reset_random) -> None:
     """Test traffic distribution with multiple variants (A/B/C)
 
     Verifies:
