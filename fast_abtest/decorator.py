@@ -1,14 +1,16 @@
 from collections.abc import Iterable
+from functools import wraps
+from inspect import iscoroutinefunction, markcoroutinefunction
 from typing import Callable
 
 from .metrics import Metric  # type: ignore
 from .registred_scenario import (  # type: ignore
     RegisteredScenario,
-    ABTestFunction,
     ScenarioHandler,
     R,
     _ScenarioVariant,
 )
+from .interface import ABTestFunction  # type: ignore
 
 
 def ab_test(metrics: Iterable[Metric]) -> Callable:
@@ -43,6 +45,9 @@ def ab_test(metrics: Iterable[Metric]) -> Callable:
 
     def _wrapper(func: ScenarioHandler[R]) -> ABTestFunction[R]:
         main_scenario = _ScenarioVariant(handler=func, traffic_percent=100)
-        return RegisteredScenario[R](main_scenario)
+        ab_func = RegisteredScenario[R](main_scenario)
+        if iscoroutinefunction(func):
+            markcoroutinefunction(ab_func)
+        return wraps(func)(ab_func)
 
     return _wrapper

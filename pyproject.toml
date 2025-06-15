@@ -40,6 +40,8 @@ pytest = "^7.0"
 black = "^23.0"
 mypy = "^1.0"
 pytest-cov = "^4.0"
+fastapi = "^0.115.12"
+uvicorn = "^0.34.3"
 
 [mypy]
 python_version = "3.12"

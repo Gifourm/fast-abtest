@@ -19,21 +19,17 @@ class _ScenarioVariant(Generic[R]):
     traffic_percent: int
 
 
-class ABTestFunction(Protocol[R]):
-    def __call__(self, *args, **kwargs) -> R: ...
-
-    def register_variant(self, traffic_percent: int) -> Callable[[ScenarioHandler[R]], ScenarioHandler[R]]: ...
-
-
 class RegisteredScenario(Generic[R]):
     def __init__(self: Self, main_scenario: _ScenarioVariant[R]) -> None:
         self._variants: list[_ScenarioVariant[R]] = []
         self._main_scenario = main_scenario
-        self._main_scenario_signature = inspect.signature(self._main_scenario.handler)
+        self._main_scenario_signature = self._normalize_signature(inspect.signature(self._main_scenario.handler))
+        self._is_async = inspect.iscoroutinefunction(self._main_scenario.handler)
 
     def register_variant(self: Self, traffic_percent: int) -> Callable[[ScenarioHandler[R]], ScenarioHandler[R]]:
         def add_to_variants(variant_func: ScenarioHandler[R]) -> ScenarioHandler[R]:
             variant_func = self._validate_variant_signature(variant_func)
+            variant_func = self._validate_sync_type(variant_func)
             scenario_variant = _ScenarioVariant(handler=variant_func, traffic_percent=tp)
             self._variants.append(scenario_variant)
             self._main_scenario.traffic_percent -= tp
@@ -43,8 +39,13 @@ class RegisteredScenario(Generic[R]):
         tp = self._validate_traffic_value(traffic_percent)
         return add_to_variants
 
+    def _validate_sync_type(self: Self, func: ScenarioHandler[R]) -> ScenarioHandler[R]:
+        if inspect.iscoroutinefunction(func) != self._is_async:
+            raise TypeError("All variants must be either async or sync, cannot mix them")
+        return func
+
     def _validate_variant_signature(self: Self, func: ScenarioHandler[R]) -> ScenarioHandler[R]:
-        variant_signature = inspect.signature(func)
+        variant_signature = self._normalize_signature(inspect.signature(func))
         if variant_signature != self._main_scenario_signature:
             raise TypeError(
                 f"Variant signature must match main scenario. "
@@ -52,6 +53,20 @@ class RegisteredScenario(Generic[R]):
                 f"got: {variant_signature}"
             )
         return func
+
+    @staticmethod
+    def _normalize_signature(sig: inspect.Signature) -> str:
+        params = []
+        for name, param in sig.parameters.items():
+            if hasattr(param.default, "dependency"):
+                dep_repr = f"Depends({param.default.dependency.__name__})"
+            else:
+                dep_repr = str(param.default)
+
+            params.append(
+                f"{name}: {param.annotation}" + (f" = {dep_repr}" if param.default != inspect.Parameter.empty else "")
+            )
+        return f"({', '.join(params)}) -> {sig.return_annotation}"
 
     def _validate_total_traffic(self: Self) -> None:
         if self._main_scenario.traffic_percent < 0:
