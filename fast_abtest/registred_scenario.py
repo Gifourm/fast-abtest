@@ -36,7 +36,7 @@ class _ScenarioVariant(Generic[R]):
     def threshold_exceeded(self: Self) -> bool:
         with self._lock:
             self.error_count += 1
-            if self.error_count / max(self.call_count, 1) > self.threshold:
+            if self.call_count > 10 and self.error_count / max(self.call_count, 1) > self.threshold:
                 self.is_active = False
                 return True
         return False
