@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 from functools import wraps
 from inspect import iscoroutinefunction, markcoroutinefunction
+from logging import Logger, getLogger
 from typing import Callable
 
 from .metrics import Metric  # type: ignore
@@ -13,15 +14,30 @@ from .registred_scenario import (  # type: ignore
 from .interface import ABTestFunction  # type: ignore
 
 
-def ab_test(metrics: Iterable[Metric]) -> Callable:
+def ab_test(
+    metrics: Iterable[Metric | Callable],
+    logger: Logger = getLogger(__name__),
+) -> Callable[[ScenarioHandler[R]], ABTestFunction[R]]:
     """Decorator for implementing A/B testing of methods.
     Enables easy creation and management of multiple functions variants (A/B/C...)
     with automatic traffic distribution between them.
 
     Args:
         metrics: Collection of metrics to track (latency, error rate etc.)
+        logger: Custom Logger instance
     Returns:
-        A decorator that converts the original function into an A/B-testable version.
+        A decorator that converts the original function into an A/B-testable class version.
+        The class supports following methods:
+        def register_variant(
+            self: Self,
+            traffic_percent: int,  # The percentage of traffic redirected to the variant. 1 <= tp <= 99
+            disable_threshold: float = 1.0,  # Error rate threshold leading to termination of redirection
+        ) -> Callable[[ScenarioHandler[R]], ScenarioHandler[R]]:
+
+        def enable_variant(
+            self: Self,
+            variant_name: str  # Name of the disabled variant
+        ) -> None:
 
     Examples:
         Basic A/B test:
@@ -89,8 +105,12 @@ def ab_test(metrics: Iterable[Metric]) -> Callable:
     """
 
     def _wrapper(func: ScenarioHandler[R]) -> ABTestFunction[R]:
-        main_scenario = _ScenarioVariant(handler=func, traffic_percent=100)
-        ab_func = RegisteredScenario[R](main_scenario)
+        main_scenario = _ScenarioVariant(
+            handler=func,
+            traffic_percent=100,
+            threshold=1.0,
+        )
+        ab_func = RegisteredScenario[R](main_scenario, metrics, logger)
         if iscoroutinefunction(func):
             markcoroutinefunction(ab_func)
         return wraps(func)(ab_func)
