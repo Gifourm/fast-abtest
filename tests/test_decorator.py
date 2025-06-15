@@ -58,15 +58,15 @@ def test_multiple_variants(reset_random) -> None:
 
     @ab_test(metrics=[])
     def recommend(user_id: int) -> str:
-        return "A"  # Base variant
+        return "A"
 
     @recommend.register_variant(traffic_percent=20)
     def recommend_b(user_id: int) -> str:
-        return "B"  # 20%
+        return "B"
 
     @recommend.register_variant(traffic_percent=30)
     def recommend_c(user_id: int) -> str:
-        return "C"  # 30%
+        return "C"
 
     results = [recommend(1) for _ in range(1000)]
     assert set(results) == {"A", "B", "C"}

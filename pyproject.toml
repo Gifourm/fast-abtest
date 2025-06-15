@@ -47,3 +47,8 @@ uvicorn = "^0.34.3"
 [mypy]
 python_version = "3.12"
 strict = true
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]
