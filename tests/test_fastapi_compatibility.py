@@ -1,10 +1,22 @@
 from random import seed
 
 import pytest
-from fastapi import FastAPI, Depends, Request, HTTPException
+from fastapi import FastAPI, Depends, Request, HTTPException, Response
 from fastapi.testclient import TestClient
 from typing import Optional
+
+from pydantic import BaseModel
+
 from fast_abtest import ab_test
+
+
+class ItemModel(BaseModel):
+    id: int
+    name: str
+
+
+class ErrorModel(BaseModel):
+    detail: str
 
 
 @pytest.fixture
@@ -315,3 +327,101 @@ def test_multiple_variants_distribution(client, test_app, reset_random) -> None:
     assert 22 <= percentages["B"] <= 28, f"Variant B: {percentages['B']}% (expected 25±3%)"
     assert 12 <= percentages["C"] <= 18, f"Variant C: {percentages['C']}% (expected 15±3%)"
     assert sum(percentages.values()) == 100, "Total should be 100%"
+
+
+def test_openapi_with_response_model(client, test_app):
+    """Test response_model support in the OpenAPI documentation"""
+
+    @test_app.get("/items/{id}", response_model=ItemModel)
+    @ab_test(metrics=[])
+    def get_item(id: int):
+        return {"id": id, "name": "Test Item"}
+
+    @get_item.register_variant(traffic_percent=30)
+    def get_item_b(id: int):
+        return {"id": id, "name": "Variant B"}
+
+    response = client.get("/openapi.json")
+
+    path_item = response.json()["paths"]["/items/{id}"]["get"]
+    assert (
+        path_item["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        == "#/components/schemas/ItemModel"
+    )
+
+
+def test_openapi_with_response_class(client, test_app):
+    """Test response_class support in the OpenAPI documentation"""
+
+    @test_app.get(
+        "/custom-response", response_class=Response, responses={200: {"content": {"application/octet-stream": {}}}}
+    )
+    @ab_test(metrics=[])
+    def get_custom_response():
+        return Response(content="test")
+
+    response = client.get("/openapi.json")
+
+    path_item = response.json()["paths"]["/custom-response"]["get"]
+    assert "application/octet-stream" in path_item["responses"]["200"]["content"]
+
+
+def test_openapi_with_status_code(client, test_app):
+    """Test the status code is saved in the OpenAPI documentation"""
+
+    @test_app.get("/error", responses={404: {"model": ErrorModel}})
+    @ab_test(metrics=[])
+    def get_with_error():
+        return {"detail": "Not found"}
+
+    response = client.get("/openapi.json")
+
+    path_item = response.json()["paths"]["/error"]["get"]
+    assert "404" in path_item["responses"]
+    assert (
+        path_item["responses"]["404"]["content"]["application/json"]["schema"]["$ref"]
+        == "#/components/schemas/ErrorModel"
+    )
+
+
+def test_openapi_with_multiple_response_models(client, test_app):
+    """Test the display of models in the OpenAPI documentation"""
+
+    @test_app.get("/items", response_model=list[ItemModel])
+    @ab_test(metrics=[])
+    def list_items():
+        return [{"id": 1, "name": "Test"}]
+
+    response = client.get("/openapi.json")
+
+    path_item = response.json()["paths"]["/items"]["get"]
+    schema_ref = path_item["responses"]["200"]["content"]["application/json"]["schema"]["items"]["$ref"]
+    assert schema_ref == "#/components/schemas/ItemModel"
+
+
+def test_openapi_with_deprecated(client, test_app):
+    """Test the deprecated flag is saved in the OpenAPI documentation"""
+
+    @test_app.get("/old", deprecated=True)
+    @ab_test(metrics=[])
+    def deprecated_endpoint():
+        return {"message": "This is old"}
+
+    response = client.get("/openapi.json")
+
+    path_item = response.json()["paths"]["/old"]["get"]
+    assert path_item["deprecated"] is True
+
+
+def test_openapi_with_tags(client, test_app):
+    """Test tags are saved in the OpenAPI documentation"""
+
+    @test_app.get("/tagged", tags=["ABTest"])
+    @ab_test(metrics=[])
+    def tagged_endpoint():
+        return {"message": "Tagged"}
+
+    response = client.get("/openapi.json")
+
+    path_item = response.json()["paths"]["/tagged"]["get"]
+    assert "ABTest" in path_item["tags"]
