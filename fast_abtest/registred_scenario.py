@@ -7,7 +7,7 @@ from typing import Callable, TypeVar, Generic, Protocol, Iterable
 
 from typing_extensions import Self
 
-from fast_abtest.monitoring.metrics import Metric
+from .metrics import Metric
 
 R = TypeVar("R")
 R_co = TypeVar("R_co", covariant=True)
@@ -17,16 +17,6 @@ class ScenarioHandler(Protocol[R_co]):
     __name__: str
 
     def __call__(self, *args, **kwargs) -> R_co: ...
-
-
-@dataclass
-class Context:
-    scenario: str
-    variant: str
-    timestamp: int
-    args: tuple
-    kwargs: dict
-    extra: dict
 
 
 @dataclass
