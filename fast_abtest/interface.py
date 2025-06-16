@@ -1,6 +1,6 @@
 from typing import Protocol, Callable, Self
 
-from fast_abtest.registred_scenario import R, ScenarioHandler, Context
+from fast_abtest.registred_scenario import R, ScenarioHandler
 
 
 class ABTestFunction(Protocol[R]):
@@ -13,9 +13,3 @@ class ABTestFunction(Protocol[R]):
     ) -> Callable[[ScenarioHandler[R]], ScenarioHandler[R]]: ...
 
     def enable_variant(self: Self, variant_name: str) -> None: ...
-
-
-class Metric(Protocol):
-    def on_start(self: Self, context: Context) -> None: ...
-
-    def on_end(self: Self, context: Context, is_error: bool) -> None: ...
