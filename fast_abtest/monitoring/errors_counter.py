@@ -1,6 +1,6 @@
 from typing import Self
 
-from fast_abtest.monitoring.interface import Exporter, Label
+from fast_abtest.monitoring.interface import Exporter, MetricLabel
 from fast_abtest.registred_scenario import Context
 
 
@@ -12,7 +12,7 @@ class ErrorsMetric:
 
     def on_end(self: Self, context: Context, is_error: bool) -> None:
         if is_error:
-            label = Label(
+            label = MetricLabel(
                 metric="errors_total",
                 func=context.scenario,
                 variant=context.variant,

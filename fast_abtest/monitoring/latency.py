@@ -1,7 +1,7 @@
 from time import perf_counter
 from typing import Self
 
-from fast_abtest.monitoring.interface import Exporter, Label
+from fast_abtest.monitoring.interface import Exporter, MetricLabel
 from fast_abtest.registred_scenario import Context
 
 
@@ -15,7 +15,7 @@ class LatencyMetric:
 
     def on_end(self: Self, context: Context, is_error: bool) -> None:
         latency = perf_counter() - self._start_time
-        label = Label(
+        label = MetricLabel(
             metric="latency",
             func=context.scenario,
             variant=context.variant,

@@ -1,6 +1,6 @@
 from typing import Self
 
-from fast_abtest.monitoring.interface import Exporter, Label
+from fast_abtest.monitoring.interface import Exporter, MetricLabel
 from fast_abtest.registred_scenario import Context
 
 
@@ -9,7 +9,7 @@ class CallsMetric:
         self._exporter = exporter
 
     def on_start(self: Self, context: Context) -> None:
-        label = Label(
+        label = MetricLabel(
             metric="calls_total",
             func=context.scenario,
             variant=context.variant,

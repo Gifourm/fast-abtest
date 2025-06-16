@@ -3,7 +3,7 @@ from typing import Protocol, Self, Any
 
 
 @dataclass
-class Label:
+class MetricLabel:
     metric: str
     func: str
     variant: str
@@ -12,4 +12,4 @@ class Label:
 
 
 class Exporter(Protocol):
-    def record(self: Self, label: Label, value: Any): ...
+    def record(self: Self, label: MetricLabel, value: Any): ...
