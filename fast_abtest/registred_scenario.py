@@ -53,7 +53,7 @@ class _ScenarioVariant(Generic[R]):
 
 
 class RegisteredScenario(Generic[R]):
-    EXCEEDING_THRESHOLD_WARNING = "Variant {} disabled by error rate (error rate: {:.2}"
+    EXCEEDING_THRESHOLD_WARNING = "Variant {} disabled by error rate (error rate: {:.2})"
 
     def __init__(
         self: Self,
