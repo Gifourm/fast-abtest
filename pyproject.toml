@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "fast-abtest"
-version = "0.2.1"
+version = "0.3.0"
 description = "A fast and lightweight A/B testing library for Python."
 authors = ["Evgenii Eliseev <evgeniieliseeve@gmail.com>"]
 license = "MIT"
