@@ -1,20 +1,22 @@
 from typing import Self
 
-from fast_abtest.monitoring.interface import Exporter, MetricLabel
+from fast_abtest.monitoring.interface import Exporter, MetricLabel, BaseMetric
 from fast_abtest.registred_scenario import Context
 
 
-class CallsMetric:
+class CallsMetric(BaseMetric):
     def __init__(self: Self, exporter: Exporter) -> None:
-        self._exporter = exporter
+        super().__init__(exporter)
+        self._calls = 0
 
-    def on_start(self: Self, context: Context) -> None:
+    def on_start(self: Self, context: Context) -> Context:
+        with self._lock:
+            self._calls += 1
         label = MetricLabel(
-            metric="calls_total",
+            metric=self.__class__.__name__,
             func=context.scenario,
             variant=context.variant,
             is_error=False,
         )
         self._exporter.record(label=label, value=1)
-
-    def on_end(self: Self, context: Context, is_error: bool) -> None: ...
+        return context
