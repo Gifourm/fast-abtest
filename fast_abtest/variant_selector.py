@@ -1,26 +1,26 @@
 from random import randint
 from typing import Self, Iterable
 
-from fast_abtest.registred_scenario import _ScenarioVariant, ScenarioHandler
+from fast_abtest.interface import _ScenarioVariant
 
 
-class VariantSelector:
+class VariantSelector[R]:
     def __init__(
         self: Self,
-        main_scenario: _ScenarioVariant,
-        variants: Iterable[_ScenarioVariant],
+        main_scenario: _ScenarioVariant[R],
+        variants: Iterable[_ScenarioVariant[R]],
         idempotent: bool = False,
     ) -> None:
         self._variants = variants
         self._default_variant = main_scenario
         self._idempotent = idempotent
 
-    def select(self: Self) -> ScenarioHandler:
+    def select(self: Self) -> _ScenarioVariant[R]:
         if self._idempotent:
             return self._idempotent_select()
         return self._random_select()
 
-    def _random_select(self: Self) -> ScenarioHandler:
+    def _random_select(self: Self) -> _ScenarioVariant[R]:
         rand = randint(1, 100)
         current = 0
         for variant in self._variants:
@@ -30,9 +30,9 @@ class VariantSelector:
             current += variant.traffic_percent
             if rand <= current:
                 variant.increment_call()
-                return variant.handler
+                return variant
 
-        return self._default_variant.handler
+        return self._default_variant
 
-    def _idempotent_select(self: Self) -> ScenarioHandler:
-        return self._default_variant.handler
+    def _idempotent_select(self: Self) -> _ScenarioVariant[R]:
+        return self._default_variant

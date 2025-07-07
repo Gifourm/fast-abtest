@@ -1,24 +1,35 @@
-from typing import Self, Iterable
+import traceback
+from contextlib import contextmanager
+from logging import Logger
+from typing import Self, Iterable, Iterator
 
 from fast_abtest.interface import Metric
-from fast_abtest.registred_scenario import Context
+from fast_abtest.monitoring.interface import Context
 
 
 class MetricRecorder:
     def __init__(
         self: Self,
         metrics: Iterable[Metric],
-        context: Context,
+        logger: Logger,
     ) -> None:
         self._metrics = metrics
-        self._context = context
+        self._logger = logger
 
-    def __enter__(self: Self) -> Self:
-        for metric in self._metrics:
-            self._context = metric.on_start(context=self._context)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        is_error = exc_type is not None
-        for metric in self._metrics:
-            metric.on_end(context=self._context, is_error=is_error)
+    @contextmanager
+    def record(self: Self, context: Context) -> Iterator[None]:
+        try:
+            for metric in self._metrics:
+                context = metric.on_start(context=context)
+            yield
+        except:
+            is_error = True
+            raise
+        else:
+            is_error = False
+        finally:
+            try:
+                for metric in self._metrics:
+                    metric.on_end(context=context, is_error=is_error)
+            except:
+                self._logger.error(traceback.format_exc())

@@ -5,21 +5,47 @@ from inspect import iscoroutinefunction, markcoroutinefunction
 from logging import Logger, getLogger
 from typing import Callable
 
-from fast_abtest.monitoring.metrics import Metric as MetricEnum  # type: ignore
 from fast_abtest.exporter import PrometheusExporter
+from .config import ConfigManager
+from .interface import ABTestFunction, Metric, R, ScenarioHandler, _ScenarioVariant  # type: ignore
 from .monitoring.interface import Exporter
+from .monitoring.metrics import Metric as MetricEnum
 from .registred_scenario import (  # type: ignore
     RegisteredScenario,
-    ScenarioHandler,
-    R,
-    _ScenarioVariant,
 )
-from .interface import ABTestFunction, Metric  # type: ignore
+
+
+def _get_metric_class_name(metric: type[Metric] | MetricEnum):
+    if isinstance(metric, Enum):
+        return metric.value.__name__
+    return metric.__class__.__name__
+
+
+def _create_registered_scenario(
+    func: ScenarioHandler[R],
+    metrics: Iterable[type[Metric]],
+    exporter: type[Exporter],
+    logger: Logger,
+) -> RegisteredScenario[R]:
+    config = ConfigManager.get_config()
+    main_scenario = _ScenarioVariant(
+        handler=func,
+        traffic_percent=100,
+        threshold=1.0,
+    )
+    metric_names = [_get_metric_class_name(metric) for metric in metrics]
+    initialized_exporter = exporter(
+        metrics=metric_names,
+        labelnames=config.default_labels,
+        port=config.prometheus_port,
+    )
+    initialized_metrics = [metric(initialized_exporter) for metric in metrics]
+    return RegisteredScenario[R](main_scenario, initialized_metrics, logger)
 
 
 def ab_test(
-    metrics: Iterable[MetricEnum | type[Metric]],
-    exporter: Exporter = PrometheusExporter,
+    metrics: Iterable[type[Metric] | MetricEnum],
+    exporter: type[Exporter] = PrometheusExporter,
     logger: Logger = getLogger(__name__),
 ) -> Callable[[ScenarioHandler[R]], ABTestFunction[R]]:
     """Decorator for implementing A/B testing of methods.
@@ -27,7 +53,7 @@ def ab_test(
     with automatic traffic distribution between them.
 
     Args:
-        metrics: Collection of metrics to track (latency, error rate etc.)
+        metrics: Collection of metrics to track (Metric.LATENCY, Metric.CALLS_TOTAL etc.)
         exporter: A class that implements the Exporter interface for uploading metrics
         (PrometheusExporter, ConsoleExporter, or custom exporter)
         logger: Custom Logger instance
@@ -47,7 +73,7 @@ def ab_test(
 
     Examples:
         Basic A/B test:
-        ```python
+        ```
         @ab_test(metrics=[Metric.LATENCY, Metric.ERROR_RATE])
         def get_recommendations(user_id: int) -> list[Recommendation]:
             # Main variant (A) - receives remaining traffic percentage
@@ -60,7 +86,7 @@ def ab_test(
         ```
 
         FastAPI endpoint with A/B testing (correct order):
-        ```python
+        ```
         from fastapi import FastAPI, Depends
 
         app = FastAPI()
@@ -111,18 +137,7 @@ def ab_test(
     """
 
     def _wrapper(func: ScenarioHandler[R]) -> ABTestFunction[R]:
-        main_scenario = _ScenarioVariant(
-            handler=func,
-            traffic_percent=100,
-            threshold=1.0,
-        )
-        initialized_metrics = []
-        for metric in metrics:
-            if isinstance(metric, MetricEnum):
-                initialized_metrics.append(metric.value(exporter))
-            elif issubclass(metric, Metric):
-                initialized_metrics.append(metric(exporter))
-        ab_func = RegisteredScenario[R](main_scenario, initialized_metrics, logger)
+        ab_func = _create_registered_scenario(func, metrics, exporter, logger)
         if iscoroutinefunction(func):
             markcoroutinefunction(ab_func)
         return wraps(func)(ab_func)

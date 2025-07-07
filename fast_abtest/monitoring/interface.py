@@ -1,8 +1,14 @@
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Protocol, Self, Any
+from typing import Protocol, Self, Iterable
 
-from fast_abtest.registred_scenario import Context
+
+@dataclass
+class Context:
+    scenario: str
+    variant: str
+    timestamp: int
+    extra: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -15,7 +21,14 @@ class MetricLabel:
 
 
 class Exporter(Protocol):
-    def record(self: Self, label: MetricLabel, value: float | int): ...
+    def __init__(
+        self: Self,
+        metrics: Iterable[str],  # noqa
+        labelnames: Iterable[str],  # noqa
+        port: int,  # noqa
+    ) -> None: ...
+
+    def record(self: Self, label: MetricLabel, value: float | int) -> None: ...
 
 
 class BaseMetric:
