@@ -15,7 +15,7 @@ class MetricLabel:
 
 
 class Exporter(Protocol):
-    def record(self: Self, label: MetricLabel, value: Any): ...
+    def record(self: Self, label: MetricLabel, value: float | int): ...
 
 
 class BaseMetric:

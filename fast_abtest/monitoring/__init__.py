@@ -1,2 +1,2 @@
-from metrics import Metric
-from interface import MetricLabel
+from .metrics import Metric
+from .interface import MetricLabel

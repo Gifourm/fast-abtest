@@ -1,21 +1,25 @@
 from collections.abc import Iterable
+from enum import Enum
 from functools import wraps
 from inspect import iscoroutinefunction, markcoroutinefunction
 from logging import Logger, getLogger
 from typing import Callable
 
-from .metrics import Metric  # type: ignore
+from fast_abtest.monitoring.metrics import Metric as MetricEnum  # type: ignore
+from fast_abtest.exporter import PrometheusExporter
+from .monitoring.interface import Exporter
 from .registred_scenario import (  # type: ignore
     RegisteredScenario,
     ScenarioHandler,
     R,
     _ScenarioVariant,
 )
-from .interface import ABTestFunction  # type: ignore
+from .interface import ABTestFunction, Metric  # type: ignore
 
 
 def ab_test(
-    metrics: Iterable[Metric | Callable],
+    metrics: Iterable[MetricEnum | type[Metric]],
+    exporter: Exporter = PrometheusExporter,
     logger: Logger = getLogger(__name__),
 ) -> Callable[[ScenarioHandler[R]], ABTestFunction[R]]:
     """Decorator for implementing A/B testing of methods.
@@ -24,6 +28,8 @@ def ab_test(
 
     Args:
         metrics: Collection of metrics to track (latency, error rate etc.)
+        exporter: A class that implements the Exporter interface for uploading metrics
+        (PrometheusExporter, ConsoleExporter, or custom exporter)
         logger: Custom Logger instance
     Returns:
         A decorator that converts the original function into an A/B-testable class version.
@@ -110,7 +116,13 @@ def ab_test(
             traffic_percent=100,
             threshold=1.0,
         )
-        ab_func = RegisteredScenario[R](main_scenario, metrics, logger)
+        initialized_metrics = []
+        for metric in metrics:
+            if isinstance(metric, MetricEnum):
+                initialized_metrics.append(metric.value(exporter))
+            elif issubclass(metric, Metric):
+                initialized_metrics.append(metric(exporter))
+        ab_func = RegisteredScenario[R](main_scenario, initialized_metrics, logger)
         if iscoroutinefunction(func):
             markcoroutinefunction(ab_func)
         return wraps(func)(ab_func)

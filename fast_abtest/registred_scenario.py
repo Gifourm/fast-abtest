@@ -7,6 +7,7 @@ from typing import Callable, TypeVar, Generic, Protocol, Iterable
 
 from typing_extensions import Self
 
+from fast_abtest.monitoring.interface import Exporter, BaseMetric
 from fast_abtest.monitoring.metrics import Metric
 
 R = TypeVar("R")
@@ -58,7 +59,7 @@ class RegisteredScenario(Generic[R]):
     def __init__(
         self: Self,
         main_scenario: _ScenarioVariant[R],
-        metrics: Iterable[Metric | Callable],
+        metrics: Iterable[Metric],
         logger: Logger,
     ) -> None:
         self._variants: list[_ScenarioVariant[R]] = []
