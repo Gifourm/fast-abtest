@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-A lightweight Python decorator for implementing A/B testing with automatic traffic distribution. Compatible with FastAPI and works with both synchronous and asynchronous functions.
+A lightweight Python decorator for implementing A/B testing with automatic traffic distribution and built-in metrics monitoring. Compatible with FastAPI and works with both synchronous and asynchronous functions.
 
 ## Features
 
@@ -11,12 +11,12 @@ A lightweight Python decorator for implementing A/B testing with automatic traff
 - ⚡ Supports both sync and async functions
 - 🚀 Native FastAPI integration
 - 📊 Automatic traffic distribution
-- 🔒 Type safety with Python type hints
-- 🛠️ Supports unlimited variants (A/B/C/D...)
+- 📈 Built-in Prometheus metrics
+- 🛠️ Custom metrics support
+- 🔍 Real-time insights
+- ♾️ Unlimited variants
 
 ## Installation
-
-For now, you can install directly from GitHub:
 
 ```bash
 pip install git+https://github.com/gifourm/fast-abtest.git
@@ -29,7 +29,7 @@ pip install git+https://github.com/gifourm/fast-abtest.git
 ```python
 from fast_abtest import ab_test, Metric
 
-@ab_test(metrics=[])
+@ab_test(metrics=[Metric.LATENCY, Metric.ERRORS_TOTAL])
 def recommendation_service(user_id: int) -> list[str]:
     # Main variant (A) - receives remaining traffic percentage
     return ["item1", "item2"]
@@ -60,46 +60,74 @@ async def get_recommendations_b(user_id: int):
 
 **Important**: For FastAPI, the route decorator (`@app.get`) must come **before** `@ab_test`.
 
-## Advanced Usage
+## Accessing Metrics
 
-### With Dependencies
+Built-in Prometheus metrics are available by default at:
 
-```python
-@app.post("/items")
-@ab_test(metrics=[])
-def create_item(
-    item: Item,
-    user: User = Depends(get_current_user)
-):
-    return create_item_v1(item, user)
-
-@create_item.register_variant(traffic_percent=50)
-def create_item_b(item: Item, user: User = Depends(get_current_user)):
-    return create_item_v2(item, user)
+```text
+http://localhost:8009/metrics
 ```
 
-### Response Models
+## Monitoring Integration
 
+### Built-in Prometheus Support
+- Request latencies (histograms)
+- Call counts
+- Error counts
+
+## Custom Metrics and Exporters
+
+The library provides flexible interfaces for implementing custom metrics and exporters to integrate with various monitoring systems.
+
+### Custom Exporters
+
+To create a custom exporter, implement the `Exporter` protocol that handles:
+- Initialization with metric configuration
+- Recording metric values with labels
+
+**Interface Requirements:**
 ```python
-from pydantic import BaseModel
-
-class ItemResponse(BaseModel):
-    id: int
-    name: str
-
-@app.get("/items/{id}", response_model=ItemResponse)
-@ab_test(metrics=[])
-def get_item(id: int):
-    return {"id": id, "name": "Test Item"}
+class Exporter(Protocol):
+    def __init__(
+        self,
+        metrics: Iterable[str],
+        func_name: str,
+        labelnames: Iterable[str],
+        port: int
+    ) -> None: ...
+    
+    def record(self, label: MetricLabel, value: float | int) -> None: ...
 ```
 
-## Metrics Tracking
+## Creating Custom Metrics
 
-Currently, tracking metrics is not supported.
+To implement custom metrics in your A/B tests, you need to adhere to the following protocol:
+
+```python
+class Metric(Protocol):
+    def __init__(
+        self: Self,
+        exporter: Exporter
+    ) -> None: ...
+    
+    def on_start(self: Self, context: Context) -> Context: ...
+    
+    def on_end(self: Self, context: Context, is_error: bool) -> None: ...
+```
+
+## Configuration
+
+### Environment Variables
+
+| Variable         | Default               | Description                          |
+|------------------|-----------------------|--------------------------------------|
+| `ABTEST_PORT`    | 8009                | Prometheus-server metrics port       |
+| `ABTEST_LABELS`  | "variant,func,metric" | Default metric labels. You can extend this with additional custom labels              |
+| `ABTEST_BUCKETS` | "0.1,0.5,1.0,2.0,5.0" | Default histogram buckets |
 
 ## Development Status
 
-Current version: `0.2.0-alpha`
+Current version: `0.3.0-alpha`
 
 ### Roadmap
 
@@ -107,8 +135,8 @@ Current version: `0.2.0-alpha`
 - [x] FastAPI integration
 - [x] Async support
 - [x] Auto-disable failing variants
-- [ ] Advanced metrics collection
-- [ ] Custom metric callbacks
+- [x] Advanced metrics collection
+- [x] Custom metric callbacks
 - [ ] Distributed traffic consistency
 - [ ] Persistent variant assignment
 
