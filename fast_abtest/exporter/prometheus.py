@@ -53,9 +53,6 @@ class PrometheusExporter:
     ) -> None:
         metric_name = f"abtest_{self._func_name}_{metric_name}"
         with self._lock:
-            # if metric_name in (self._histograms if "latency" in metric_name.lower() else self._metrics):
-            #     return
-
             if "latency" in metric_name.lower():
                 self._histograms[metric_name] = Histogram(
                     name=metric_name,
