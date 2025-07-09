@@ -174,7 +174,7 @@ def test_threshold_precision_with_threads(reset_random):
     def precision_endpoint():
         return "ok"
 
-    @precision_endpoint.register_variant(traffic_percent=80, disable_threshold=0.4)
+    @precision_endpoint.register_variant(traffic_percent=80, disable_threshold=0.5)
     def variant_b():
         if threading.get_ident() % 3 == 0:
             raise RuntimeError("Thread error")

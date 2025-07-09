@@ -1,62 +1,32 @@
 import inspect
-from dataclasses import dataclass, field
+import time
 from logging import Logger
-from random import randint
-from threading import Lock
-from typing import Callable, TypeVar, Generic, Protocol, Iterable
+from typing import Callable, Generic, Iterable, Self
 
-from typing_extensions import Self
-
-from .metrics import Metric
-
-R = TypeVar("R")
-R_co = TypeVar("R_co", covariant=True)
-
-
-class ScenarioHandler(Protocol[R_co]):
-    __name__: str
-
-    def __call__(self, *args, **kwargs) -> R_co: ...
-
-
-@dataclass
-class _ScenarioVariant(Generic[R]):
-    handler: ScenarioHandler[R]
-    traffic_percent: int
-    threshold: float
-    call_count: int = 0
-    error_count: int = 0
-    is_active: bool = True
-    _lock: Lock = field(default_factory=Lock, init=False)
-
-    def increment_call(self: Self) -> None:
-        with self._lock:
-            self.call_count += 1
-
-    def threshold_exceeded(self: Self) -> bool:
-        with self._lock:
-            self.error_count += 1
-            if self.call_count > 10 and self.error_count / max(self.call_count, 1) > self.threshold:
-                self.is_active = False
-                return True
-        return False
+from fast_abtest.interface import R, ScenarioHandler, _ScenarioVariant, Metric
+from fast_abtest.monitoring.interface import Context
+from fast_abtest.monitoring.recorder import MetricRecorder
+from fast_abtest.variant_selector import VariantSelector
 
 
 class RegisteredScenario(Generic[R]):
-    EXCEEDING_THRESHOLD_WARNING = "Variant {} disabled by error rate (error rate: {:.2}"
+    EXCEEDING_THRESHOLD_WARNING = "Variant {} disabled by error rate (error rate: {:.2})"
 
     def __init__(
         self: Self,
         main_scenario: _ScenarioVariant[R],
-        metrics: Iterable[Metric | Callable],
+        metrics: Iterable[Metric],
         logger: Logger,
+        idempotent: bool = False,
     ) -> None:
         self._variants: list[_ScenarioVariant[R]] = []
-        self._metrics = metrics
+        self._metric_recorder = MetricRecorder(metrics, logger)
         self._main_scenario = main_scenario
         self._main_scenario_signature = self._normalize_signature(inspect.signature(self._main_scenario.handler))
+        self._variant_selector: VariantSelector | None = None
         self._is_async = inspect.iscoroutinefunction(self._main_scenario.handler)
         self._logger = logger
+        self._idempotent = idempotent
 
     def register_variant(
         self: Self,
@@ -136,24 +106,22 @@ class RegisteredScenario(Generic[R]):
         *args,
         **kwargs,
     ) -> R:
-        rand = randint(1, 100)
-        current = 0
-        for variant in self._variants:
-            if not variant.is_active:
-                continue
-
-            current += variant.traffic_percent
-            if rand <= current:
-                variant.increment_call()
-                try:
-                    return variant.handler(*args, **kwargs)
-                except:
-                    if variant.threshold_exceeded():
-                        msg = self.EXCEEDING_THRESHOLD_WARNING.format(
-                            variant.handler.__name__,
-                            variant.error_count / variant.call_count,
-                        )
-                        self._logger.warning(msg)
-                    raise
-
-        return self._main_scenario.handler(*args, **kwargs)
+        if self._variant_selector is None:
+            self._variant_selector = VariantSelector(self._main_scenario, self._variants, self._idempotent)
+        variant: _ScenarioVariant[R] = self._variant_selector.select()
+        context = Context(
+            scenario=self._main_scenario.handler.__name__,
+            variant=variant.handler.__name__,
+            timestamp=int(time.time()),
+        )
+        with self._metric_recorder.record(context):
+            try:
+                return variant.handler(*args, **kwargs)
+            except:
+                if variant.threshold_exceeded():
+                    msg = self.EXCEEDING_THRESHOLD_WARNING.format(
+                        variant.handler.__name__,
+                        variant.error_count / variant.call_count,
+                    )
+                    self._logger.warning(msg)
+                raise
