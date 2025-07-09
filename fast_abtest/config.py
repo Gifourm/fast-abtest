@@ -65,10 +65,8 @@ class ConfigManager:
     """Global configuration manager for A/B testing library.
 
     Maintains and provides access to the current configuration state.
-    Allows safe updates through the update_config() method.
 
     Example:
-        ConfigManager.update_config(prometheus_port=9000)
         current_config = ConfigManager.get_config()
     """
 
