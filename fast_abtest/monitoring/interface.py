@@ -24,6 +24,7 @@ class Exporter(Protocol):
     def __init__(
         self: Self,
         metrics: Iterable[str],  # noqa
+        func_name: str,  # noqa
         labelnames: Iterable[str],  # noqa
         port: int,  # noqa
     ) -> None: ...

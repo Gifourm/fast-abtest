@@ -23,7 +23,7 @@ def _get_metric_class_name(metric: type[Metric] | MetricEnum):
 
 def _create_registered_scenario(
     func: ScenarioHandler[R],
-    metrics: Iterable[type[Metric]],
+    metrics: Iterable[type[Metric] | MetricEnum],
     exporter: type[Exporter],
     logger: Logger,
 ) -> RegisteredScenario[R]:
@@ -36,6 +36,7 @@ def _create_registered_scenario(
     metric_names = [_get_metric_class_name(metric) for metric in metrics]
     initialized_exporter = exporter(
         metrics=metric_names,
+        func_name=func.__name__,
         labelnames=config.default_labels,
         port=config.prometheus_port,
     )
