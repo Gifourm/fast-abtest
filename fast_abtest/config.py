@@ -77,8 +77,3 @@ class ConfigManager:
     @classmethod
     def get_config(cls: type["ConfigManager"]) -> ABTestConfig:
         return cls._current_config
-
-    @classmethod
-    def update_config(cls: type["ConfigManager"], **params) -> None:
-        current = cls._current_config.__dict__
-        cls._current_config = ABTestConfig(**current, **params)
