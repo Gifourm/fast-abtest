@@ -2,8 +2,7 @@ from contextvars import ContextVar
 from time import perf_counter
 from typing import Self
 
-from fast_abtest.monitoring.interface import Exporter, MetricLabel, BaseMetric
-from fast_abtest.registred_scenario import Context
+from fast_abtest.monitoring.interface import Exporter, MetricLabel, BaseMetric, Context
 
 
 class LatencyMetric(BaseMetric):

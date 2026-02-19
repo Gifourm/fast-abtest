@@ -10,9 +10,7 @@ from .config import ConfigManager
 from .interface import ABTestFunction, Metric, R, ScenarioHandler, _ScenarioVariant  # type: ignore
 from .monitoring.interface import Exporter
 from .monitoring.metrics import Metric as MetricEnum
-from .registred_scenario import (  # type: ignore
-    RegisteredScenario,
-)
+from .registred_scenario import RegisteredScenario
 
 
 def _get_metric_class_name(metric: type[Metric] | MetricEnum):
@@ -26,6 +24,7 @@ def _create_registered_scenario(
     metrics: Iterable[type[Metric] | MetricEnum],
     exporter: type[Exporter],
     logger: Logger,
+    consistency_key: str | None = None,
 ) -> RegisteredScenario[R]:
     config = ConfigManager.get_config()
     main_scenario = _ScenarioVariant(
@@ -41,13 +40,14 @@ def _create_registered_scenario(
         port=config.prometheus_port,
     )
     initialized_metrics = [metric(initialized_exporter) for metric in metrics]
-    return RegisteredScenario[R](main_scenario, initialized_metrics, logger)
+    return RegisteredScenario[R](main_scenario, initialized_metrics, logger, consistency_key)
 
 
 def ab_test(
     metrics: Iterable[type[Metric] | MetricEnum],
     exporter: type[Exporter] = PrometheusExporter,
     logger: Logger = getLogger(__name__),
+    consistency_key: str | None = None,
 ) -> Callable[[ScenarioHandler[R]], ABTestFunction[R]]:
     """Decorator for implementing A/B testing of methods.
     Enables easy creation and management of multiple functions variants (A/B/C...)
@@ -58,32 +58,34 @@ def ab_test(
         exporter: A class that implements the Exporter interface for uploading metrics
         (PrometheusExporter, ConsoleExporter, or custom exporter)
         logger: Custom Logger instance
+        consistency_key: The name of the argument of the function or the structure accessible from it
+        for the consistently choice of the variant
     Returns:
         A decorator that converts the original function into an A/B-testable class version.
         The class supports following methods:
-        def register_variant(
-            self: Self,
-            traffic_percent: int,  # The percentage of traffic redirected to the variant. 1 <= tp <= 99
-            disable_threshold: float = 1.0,  # Error rate threshold leading to termination of redirection
-        ) -> Callable[[ScenarioHandler[R]], ScenarioHandler[R]]:
+        def register_variant(\r
+            self: Self,\r
+            traffic_percent: int,  # The percentage of traffic redirected to the variant. 1 <= tp <= 99\r
+            disable_threshold: float = 1.0,  # Error rate threshold leading to termination of redirection\r
+        ) -> Callable[[ScenarioHandler[R]], ScenarioHandler[R]]:\r
 
-        def enable_variant(
-            self: Self,
-            variant_name: str  # Name of the disabled variant
-        ) -> None:
+        def enable_variant(\r
+            self: Self\r
+            variant_name: str  # Name of the disabled variant\r
+        ) -> None:\r
 
     Examples:
         Basic A/B test:
         ```
-        @ab_test(metrics=[Metric.LATENCY, Metric.ERROR_RATE])
-        def get_recommendations(user_id: int) -> list[Recommendation]:
-            # Main variant (A) - receives remaining traffic percentage
-            return generate_recommendations_v1(user_id)
+        @ab_test(metrics=[Metric.LATENCY, Metric.ERROR_RATE])\r
+        def get_recommendations(user_id: int) -> list[Recommendation]:\r
+            # Main variant (A) - receives remaining traffic percentage\r
+            return generate_recommendations_v1(user_id)\r
 
-        @get_recommendations.register_variant(traffic_percent=30)
-        def get_recommendations_b(user_id: int) -> list[Recommendation]:
-            # Alternative variant (B) - receives 30% of traffic
-            return generate_recommendations_v2(user_id)
+        @get_recommendations.register_variant(traffic_percent=30)\r
+        def get_recommendations_b(user_id: int) -> list[Recommendation]:\r
+            # Alternative variant (B) - receives 30% of traffic\r
+            return generate_recommendations_v2(user_id)\r
         ```
 
         FastAPI endpoint with A/B testing (correct order):
@@ -127,6 +129,10 @@ def ab_test(
           @app.get("/wrong")  # Incorrect: route decorator should be the first one
           def bad_order_example(): ...
           ```
+        - If it needs to select an object from a Sequence to achieve a consistency_key,
+          a first element will be selected.
+        - If you need to select an object from fastapi.Depends to achieve consistency_key
+          then call enable_dependency_support(app) when creating the application.
 
     Features:
         - Supports unlimited variants (A/B/C/D...)
@@ -138,9 +144,10 @@ def ab_test(
     """
 
     def _wrapper(func: ScenarioHandler[R]) -> ABTestFunction[R]:
-        ab_func = _create_registered_scenario(func, metrics, exporter, logger)
+        ab_func = _create_registered_scenario(func, metrics, exporter, logger, consistency_key)
         if iscoroutinefunction(func):
             markcoroutinefunction(ab_func)
+
         return wraps(func)(ab_func)
 
     return _wrapper
