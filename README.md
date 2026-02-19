@@ -80,6 +80,8 @@ async def get_recommendations_b(user_id: int):
 The decorator maintains a consistent distribution of method calls based on the key. A function parameter can be used as a key, or any parameter that is accessible from the function parameters through nested structures, such as pydantic.BaseMode, dataclass, list, CustomClass. The value of the specified parameter obtained when calling the function will be used for allocation. The value can also be extracted from fastapi.Depends. 
 A BFS is used to determine the key value. There is no need to specify the full path to the key.
 
+**Important**: If you need to select an object from `fastapi.Depends` to achieve `consistency_key` then call `enable_dependency_support(app)` when creating the application..
+
 ## Accessing Metrics
 
 Built-in Prometheus metrics are available by default at:
