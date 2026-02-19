@@ -60,6 +60,26 @@ async def get_recommendations_b(user_id: int):
 
 **Important**: For FastAPI, the route decorator (`@app.get`) must come **before** `@ab_test`.
 
+### Consistent distribution
+
+```python
+from fastapi import FastAPI, Depends
+from fast_abtest import ab_test
+
+app = FastAPI()
+
+@app.get("/recommendations")
+@ab_test(metrics=[], consistency_key='user_id')
+async def get_recommendations(user_id: int):
+    return {"items": ["A1", "A2"]}
+
+@get_recommendations.register_variant(traffic_percent=30)
+async def get_recommendations_b(user_id: int):
+    return {"items": ["B1", "B2"]}
+```
+The decorator maintains a consistent distribution of method calls based on the key. A function parameter can be used as a key, or any parameter that is accessible from the function parameters through nested structures, such as pydantic.BaseMode, dataclass, list, CustomClass. The value of the specified parameter obtained when calling the function will be used for allocation. The value can also be extracted from fastapi.Depends. 
+A BFS is used to determine the key value. There is no need to specify the full path to the key.
+
 ## Accessing Metrics
 
 Built-in Prometheus metrics are available by default at:
