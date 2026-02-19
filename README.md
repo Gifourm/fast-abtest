@@ -149,18 +149,7 @@ class Metric(Protocol):
 
 ## Development Status
 
-Current version: `0.3.0-alpha`
-
-### Roadmap
-
-- [x] Core A/B testing functionality
-- [x] FastAPI integration
-- [x] Async support
-- [x] Auto-disable failing variants
-- [x] Advanced metrics collection
-- [x] Custom metric callbacks
-- [ ] Distributed traffic consistency
-- [ ] Persistent variant assignment
+Current version: `0.4.0-beta`
 
 ## Contributing
 
