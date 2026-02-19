@@ -19,7 +19,7 @@ A lightweight Python decorator for implementing A/B testing with automatic traff
 ## Installation
 
 ```bash
-pip install git+https://github.com/gifourm/fast-abtest.git
+pip install fast-abtest
 ```
 
 ## Quick Start
