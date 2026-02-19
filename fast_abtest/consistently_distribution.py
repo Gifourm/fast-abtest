@@ -130,7 +130,6 @@ class Distributor[R]:
             return await intercept_dependency(dependant, captured_values)
 
         if loop.is_running():
-            task = asyncio.create_task(capture_dependency_values())
             import concurrent.futures
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
