@@ -1,7 +1,6 @@
 from typing import Self
 
-from fast_abtest.monitoring.interface import MetricLabel, Exporter, BaseMetric
-from fast_abtest.registred_scenario import Context
+from fast_abtest.monitoring.interface import MetricLabel, Exporter, BaseMetric, Context
 
 
 class ErrorsMetric(BaseMetric):

@@ -3,6 +3,7 @@ import time
 from logging import Logger
 from typing import Callable, Generic, Iterable, Self
 
+from fast_abtest.consistently_distribution import Distributor
 from fast_abtest.interface import R, ScenarioHandler, _ScenarioVariant, Metric
 from fast_abtest.monitoring.interface import Context
 from fast_abtest.monitoring.recorder import MetricRecorder
@@ -17,16 +18,16 @@ class RegisteredScenario(Generic[R]):
         main_scenario: _ScenarioVariant[R],
         metrics: Iterable[Metric],
         logger: Logger,
-        idempotent: bool = False,
+        consistency_key: str | None = None,
     ) -> None:
         self._variants: list[_ScenarioVariant[R]] = []
         self._metric_recorder = MetricRecorder(metrics, logger)
         self._main_scenario = main_scenario
+        self._distributor = Distributor(main_scenario.handler, consistency_key) if consistency_key else None
         self._main_scenario_signature = self._normalize_signature(inspect.signature(self._main_scenario.handler))
         self._variant_selector: VariantSelector | None = None
         self._is_async = inspect.iscoroutinefunction(self._main_scenario.handler)
         self._logger = logger
-        self._idempotent = idempotent
 
     def register_variant(
         self: Self,
@@ -87,12 +88,13 @@ class RegisteredScenario(Generic[R]):
             raise ValueError("threshold must be between 0.01 and 1.0")
         return float(threshold)
 
-    @staticmethod
-    def _normalize_signature(sig: inspect.Signature) -> str:
+    def _normalize_signature(self: Self, sig: inspect.Signature) -> str:
         params = []
         for name, param in sig.parameters.items():
             if hasattr(param.default, "dependency"):
                 dep_repr = f"Depends({param.default.dependency.__name__})"
+                if self._distributor:
+                    self._distributor.has_dependencies = True
             else:
                 dep_repr = str(param.default)
 
@@ -107,8 +109,12 @@ class RegisteredScenario(Generic[R]):
         **kwargs,
     ) -> R:
         if self._variant_selector is None:
-            self._variant_selector = VariantSelector(self._main_scenario, self._variants, self._idempotent)
-        variant: _ScenarioVariant[R] = self._variant_selector.select()
+            self._variant_selector = VariantSelector(
+                self._main_scenario,
+                self._variants,
+                self._distributor,
+            )
+        variant: _ScenarioVariant[R] = self._variant_selector.select(*args, **kwargs)
         context = Context(
             scenario=self._main_scenario.handler.__name__,
             variant=variant.handler.__name__,

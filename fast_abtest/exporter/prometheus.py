@@ -1,8 +1,6 @@
 from threading import Lock
 from typing import Self, Iterable
 
-from prometheus_client import Counter, Histogram
-
 from fast_abtest.monitoring.interface import MetricLabel
 
 
@@ -16,7 +14,16 @@ class PrometheusExporter:
         labelnames: Iterable[str],
         port: int,
     ) -> None:
-        from prometheus_client import start_http_server
+        try:
+            from prometheus_client import Counter, Histogram, start_http_server
+
+            self._counter = Counter
+            self._hist = Histogram
+        except ImportError:
+            raise ImportError(
+                "prometheus_client integration requires 'prometheus'. "
+                "Install it with: pip install fast-abtest[prometheus]"
+            )
 
         start_http_server(port)
 
@@ -54,14 +61,14 @@ class PrometheusExporter:
         metric_name = f"abtest_{self._func_name}_{metric_name}"
         with self._lock:
             if "latency" in metric_name.lower():
-                self._histograms[metric_name] = Histogram(
+                self._histograms[metric_name] = self._hist(
                     name=metric_name,
                     documentation=f"{metric_name} ('histogram')",
                     buckets=[0.1, 0.5, 1.0, 2.0, 5.0],
                     labelnames=self._labelnames,
                 )
             else:
-                self._metrics[metric_name] = Counter(
+                self._metrics[metric_name] = self._counter(
                     name=metric_name,
                     documentation=f"{metric_name} ('counter')",
                     labelnames=self._labelnames,
